@@ -20,7 +20,7 @@
  */
 
 /*a Includes */
-include "types/led.h"
+include "led.h"
 
 /*a Modules */
 /*m led_seven_segment*/

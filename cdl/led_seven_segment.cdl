@@ -20,7 +20,7 @@
  */
 
 /*a Includes */
-include "types/led.h"
+include "led.h"
 
 /*a Module */
 module led_seven_segment( input bit[4] hex   "Hexadecimal to display on 7-segment LED",

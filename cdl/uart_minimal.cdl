@@ -17,9 +17,9 @@
  * CDL implementation of a very simple UART
  */
 /*a Includes */
-include "types/uart.h"
-include "types/clock_divider.h"
-include "utils/clock_divider_modules.h"
+include "utils::clock_divider.h"
+include "utils::clock_divider_modules.h"
+include "uart.h"
 
 /*a Constants
 */

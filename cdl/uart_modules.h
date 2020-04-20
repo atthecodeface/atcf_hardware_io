@@ -20,7 +20,7 @@
  */
 
 /*a Includes */
-include "types/uart.h"
+include "uart.h"
 
 /*a Modules */
 /*m uart_minimal */

@@ -20,7 +20,7 @@
  */
 
 /*a Includes */
-include "types/ps2.h"
+include "ps2.h"
 
 /*a Types */
 /*t t_key_action */

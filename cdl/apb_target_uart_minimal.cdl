@@ -17,11 +17,11 @@
  * CDL implementation of a very simple APB UART
  */
 /*a Includes */
-include "types/apb.h"
-include "types/uart.h"
-include "types/clock_divider.h"
-include "input/uart_modules.h"
-include "utils/clock_divider_modules.h"
+include "apb::apb.h"
+include "utils::clock_divider.h"
+include "utils::clock_divider_modules.h"
+include "uart.h"
+include "uart_modules.h"
 
 /*a Constants
 */

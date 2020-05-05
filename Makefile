@@ -3,6 +3,7 @@ include ${CDL_ROOT}/lib/cdl/cdl_templates.mk
 SRC_ROOT   = $(abspath ${CURDIR})
 OTHER_SRCS = ${SRC_ROOT}/../*
 BUILD_ROOT = ${SRC_ROOT}/build
+TEST_DIR   = ${CURDIR}/test
 
 all: sim
 
@@ -11,5 +12,7 @@ all: sim
 $(eval $(call cdl_makefile_template,${SRC_ROOT},${BUILD_ROOT},${OTHER_SRCS}))
 
 smoke: ${SIM}
-#	(cd ${SRC_ROOT}/test && PATH=${SRC_ROOT}/python:${PATH} ${MAKE} SIM=${SIM} smoke)
+	@echo "atcf_hardware_io has no tests yet"
+
+#	${Q}(cd ${TEST_DIR} && PATH=${TEST_DIR}/python:${PATH} ${MAKE} Q=${Q} SIM=${SIM} smoke)
 

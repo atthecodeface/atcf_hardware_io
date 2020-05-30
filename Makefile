@@ -12,7 +12,8 @@ all: sim
 $(eval $(call cdl_makefile_template,${SRC_ROOT},${BUILD_ROOT},${OTHER_SRCS}))
 
 smoke: ${SIM}
-	@echo "atcf_hardware_io has no tests yet"
+	${Q}(cd ${TEST_DIR} && ${MAKE} Q=${Q} smoke)
 
-#	${Q}(cd ${TEST_DIR} && PATH=${TEST_DIR}/python:${PATH} ${MAKE} Q=${Q} SIM=${SIM} smoke)
+regress: ${PYSIM}
+	${Q}(cd ${TEST_DIR} && ${MAKE} Q=${Q} regress)
 

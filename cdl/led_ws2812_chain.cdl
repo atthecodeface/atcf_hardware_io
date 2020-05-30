@@ -459,6 +459,18 @@ at a time.
         /*b All done */
     }
 
+    /*b Logging */
+    clocked bit log_last_data_out = 0;
+    logging : {
+        if (data_chain_combs.clk_enable) {
+            if (log_last_data_out != led_chain) {
+                log("data change",
+                    "data_out", led_chain);
+                log_last_data_out <= led_chain;
+            }
+        }
+    }
+    
     /*b All done */
 }
 

@@ -246,7 +246,7 @@ class LedChainHardware(HardwareThDut):
     dut_outputs = {"led_request":t_led_ws2812_request,
                    "led_chain":1
     }
-    loggers = { "led_pin": {"modules":"dut", "verbose":0, "filename":"led.log"}
+    loggers = { # "led_pin": {"modules":"dut", "verbose":0, "filename":"led.log"}
                 }
     pass
 

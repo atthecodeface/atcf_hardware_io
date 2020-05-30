@@ -2,5 +2,6 @@
 build
 sim
 *vcd
+*log
 *mif
 __pycache__

@@ -12,7 +12,11 @@
 #  for more details.
 
 #a Imports
+from regress.apb.structs import t_apb_request, t_apb_response
+from regress.apb.bfm     import ApbMaster
 from regress.io.led import t_led_ws2812_data, t_led_ws2812_request
+from regress.io.target_led_ws2812 import LedWs2812AddressMap
+from cdl.utils   import csr
 from cdl.sim     import ThExecFile, LogEventParser
 from cdl.sim     import HardwareThDut
 from cdl.sim     import TestCase
@@ -72,6 +76,20 @@ class Ws2812LedChain(object):
         for l in self.leds: l.load()
         self.loaded(self.leds)
         pass
+    #f wait_for_low
+    def wait_for_low(self, cycle, data, cycles_to_wait_for):
+        """
+        If last event was further back from this event than cycles_to_wait_for then return True
+        """
+        waited_long_enough = True
+        if (cycle-self.last_falling_cycle) < cycles_to_wait_for:
+            waited_long_enough = False
+            pass
+        if (cycle-self.last_rising_cycle) < cycles_to_wait_for:
+            waited_long_enough = False
+            pass
+        self.data_change(cycle, data)
+        return waited_long_enough
     #f data_change - report a change in the data in pin
     def data_change(self, cycle, data=None):
         if data is None: data = self.data_in
@@ -143,19 +161,52 @@ class LedChainTest_Base(ThExecFile):
         for i in range(len(led_values)):
             self.drive_led(n=i, rgb=led_values[i])
             pass
+        self.bfm_wait(3*150*self.cfg_divider_400ns)
+        pass
+    #f drive_leds_apb
+    def drive_leds_apb(self, led_values):
+        self.verbose.info("Drive %s"%(str(led_values)))
+        for i in range(len(led_values)):
+            (r,g,b)=led_values[i]
+            data = ((r&0xff)<<0) | ((g&0xff)<<8) | ((b&0xff)<<16)
+            self.apb.write(address=i+self.apb_map.led0.Address(), data=data)
+            self.expected_led_values.append(led_values[i])
+            pass
+        # Wait until the LED chain is low for a while before waiting for the expected data
+        # bfm_cycles_beyond is how much we have waited beyond that point (led chain going high after gap)
+        bfm_cycles_beyond = self.clear_led_chain_log_until_low(100*self.cfg_divider_400ns)
+        # self.verbose.info("Bfm cycles beyond %d"%bfm_cycles_beyond)
+        self.bfm_wait(3*(100+len(led_values)*24)*(self.cfg_divider_400ns+1) - bfm_cycles_beyond)
         pass
     #f led_chain_loaded
     def led_chain_loaded(self, leds):
+        if self.ignore_loading: return
         leds_r = leds[:]
         leds_r.reverse()
         for l in leds_r:
             if self.expected_led_values==[]:
-                self.failtest("Unexpected loading of LED value")
+                self.failtest("Unexpected loading of LED value %s"%(str(l)))
                 continue
             (r,g,b) = self.expected_led_values.pop(0)
             self.compare_expected("red of loaded LED",l.red,r)
             self.compare_expected("green of loaded LED",l.green,g)
             self.compare_expected("blue of loaded LED",l.blue,b)
+            pass
+        pass
+    #f clear_led_chain_log_until_low
+    def clear_led_chain_log_until_low(self, cycles):
+        self.ignore_loading = True
+        while True:
+            while self.log_data.num_events()==0:
+                self.bfm_wait(cycles)
+                pass
+            # self.verbose.error("Start now %d"%self.log_data.num_events())
+            l = self.log_data_parser.parse_log_event(self.log_data.event_pop())
+            if l is None: continue
+            if self.led_chain.wait_for_low(cycle=l.global_cycle, data=l.data, cycles_to_wait_for=cycles):
+                self.ignore_loading = False
+                cycle = l.global_cycle
+                return (self.global_cycle()-l.global_cycle) // self.ticks_per_cycle()
             pass
         pass
     #f handle_led_chain_log
@@ -171,11 +222,28 @@ class LedChainTest_Base(ThExecFile):
                 pass
             pass
         self.led_chain.data_change(cycle=self.global_cycle())
+    #f configure_divider
+    def configure_divider(self):
+        if hasattr(self, "divider_400ns_in"):
+            self.apb     = ApbMaster(self, "apb_request",  "apb_response")
+            self.apb_map = LedWs2812AddressMap()
+            self.divider_400ns  = self.divider_400ns_in
+            self.led_log_module = "dut.leds"
+            self.drive_leds     = self.drive_leds_apb
+            data = (self.cfg_divider_400ns<<0) | ((self.chain_length-1)<<16)
+            self.apb.write(address=self.apb_map.config.Address(), data=data)
+            pass
+        self.divider_400ns.drive(self.cfg_divider_400ns)
+        pass
     #f run__init
     def run__init(self) -> None:
+        self.led_log_module = "dut"
+        self.ignore_loading = False
+        self.bfm_wait(1)
+        self.configure_divider()
         self.bfm_wait(10)
-        self.divider_400ns.drive(self.cfg_divider_400ns)
-        self.log_data         = self.log_recorder("dut") # Log events from led_ws2812_chain
+        self.configure_divider()
+        self.log_data         = self.log_recorder(self.led_log_module) # Log events from led_ws2812_chain
         self.log_data_parser  = DataLogParser()
         self.bfm_wait(10)
         self.led_chain        = Ws2812LedChain(self.chain_length, (1+self.cfg_divider_400ns)*self.ticks_per_cycle(), self.led_chain_loaded)
@@ -187,19 +255,18 @@ class LedChainTest_Base(ThExecFile):
             self.drive_leds(l)
             self.handle_led_chain_log()
             pass
-        self.bfm_wait(3*150*self.cfg_divider_400ns)
-        self.handle_led_chain_log()
-        self.passtest("Test completed")
+        self.compare_expected("All LEDs seen", len(self.expected_led_values),0)
         pass
     #f run__finalize
     def run__finalize(self) -> None:
+        #self.verbose.error("%d"%self.global_cycle())
         self.passtest("Test completed")
         pass
     pass
 
 #c DataLogParser - log event parser for LED chain bit toggling
 class DataLogParser(LogEventParser):
-    def filter_module(self, module_name:str) -> bool : return module_name=="dut"
+    def filter_module(self, module_name:str) -> bool : return True
     def map_log_type(self, log_type:str) -> Optional[str] :
         if log_type in self.attr_map: return log_type
         return None
@@ -234,7 +301,38 @@ class LedChainTest_2(LedChainTest_Base):
                    [(31,32,33)]*10,
                    ]
 
+#c LedChainTest_3
+class LedChainTest_3(LedChainTest_Base):
+    cfg_divider_400ns = 3
+    chain_length=16
+    led_values = []
+    for i in range(3):
+        led_values.append([])
+        for j in range(16):
+            r = i*j
+            g = (j<<i) & 0xff
+            b = (0x13*j + 0x2d*i) & 0xff
+            led_values[-1].append((r,g,b))
+            pass
+        pass
+    pass
+
 #a Hardware and test instantiation
+#c ApbTargetLedChainHardware
+class ApbTargetLedChainHardware(HardwareThDut):
+    clock_desc = [("clk",(0,1,1))]
+    reset_desc = {"name":"reset_n", "init_value":0, "wait":5}
+    module_name = "apb_target_led_ws2812"
+    dut_inputs  = {"divider_400ns_in":8,
+                   "apb_request":t_apb_request,
+    }
+    dut_outputs = {"apb_response":t_apb_response,
+                   "led_chain":1
+    }
+    loggers = { "led_pin": {"modules":"dut.leds", "verbose":0, "filename":"led.log"}
+                }
+    pass
+
 #c LedChainHardware
 class LedChainHardware(HardwareThDut):
     clock_desc = [("clk",(0,1,1))]
@@ -253,7 +351,17 @@ class LedChainHardware(HardwareThDut):
 #c TestLedChain
 class TestLedChain(TestCase):
     hw = LedChainHardware
-    _tests = {"0": (LedChainTest_0, 10*1000, {"verbosity":0}),
-              "1": (LedChainTest_1, 200*1000, {"verbosity":0}),
-              "2": (LedChainTest_2, 200*1000, {"verbosity":0}),
+    _tests = {"0": (LedChainTest_0, 8*1000,   {}),
+              "1": (LedChainTest_1, 110*1000, {}),
+              "2": (LedChainTest_2, 30*1000,  {}),
+              "3": (LedChainTest_3, 50*1000,  {}),
+    }
+
+#c TestApbLedChain
+class TestApbLedChain(TestCase):
+    hw = ApbTargetLedChainHardware
+    _tests = {"0": (LedChainTest_0, 10*1000,  {}),
+              "1": (LedChainTest_1, 160*1000, {}),
+              "2": (LedChainTest_2,  70*1000, {}),
+              "3": (LedChainTest_3,  60*1000, {}),
     }

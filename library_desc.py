@@ -16,6 +16,7 @@ class IOModules(cdl_desc.Modules):
     modules = []
     modules += [ CdlModule("apb_target_dprintf_uart")]
     modules += [ CdlModule("apb_target_ps2_host")]
+    modules += [ CdlModule("apb_target_led_ws2812")]
     modules += [ CdlModule("apb_target_uart_minimal")]
     modules += [ CdlModule("led_seven_segment")]
     modules += [ CdlModule("led_ws2812_chain")]
